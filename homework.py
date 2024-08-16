@@ -75,8 +75,7 @@ def send_message(bot, message):
 def get_api_answer(timestamp):
     """
     Отправка запроса к эндпоинту API-сервиса.
-    В случае успеха возвращает ответ API,
-    приведя его из формата JSON к типам данных Python.
+    В случае успеха возвращает ответ API, приведя его к типам данных Python.
     """
     try:
         response = requests.get(
