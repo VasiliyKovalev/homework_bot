@@ -42,20 +42,20 @@ def check_tokens():
     """Проверка доступности переменных окружения."""
     if not PRACTICUM_TOKEN:
         logger.critical(
-            "Отсутствует обязательная переменная окружения: "
-            "'PRACTICUM_TOKEN'. Программа принудительно остановлена."
+            'Отсутствует обязательная переменная окружения: '
+            '"PRACTICUM_TOKEN". Программа принудительно остановлена.'
         )
         raise NoEnvVarsError
     elif not TELEGRAM_TOKEN:
         logger.critical(
-            "Отсутствует обязательная переменная окружения: "
-            "'TELEGRAM_TOKEN'. Программа принудительно остановлена."
+            'Отсутствует обязательная переменная окружения: '
+            '"TELEGRAM_TOKEN". Программа принудительно остановлена.'
         )
         raise NoEnvVarsError
     elif not TELEGRAM_CHAT_ID:
         logger.critical(
-            "Отсутствует обязательная переменная окружения: "
-            "'TELEGRAM_CHAT_ID'. Программа принудительно остановлена."
+            'Отсутствует обязательная переменная окружения: '
+            '"TELEGRAM_CHAT_ID". Программа принудительно остановлена.'
         )
         raise NoEnvVarsError
 
@@ -66,10 +66,10 @@ def send_message(bot, message):
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
     except Exception:
         logger.exception(
-            "Не удалось отправить сообщение."
+            'Не удалось отправить сообщение.'
         )
     else:
-        logger.debug(f"Бот отправил сообщение: '{message}'.")
+        logger.debug(f'Бот отправил сообщение: "{message}".')
 
 
 def get_api_answer(timestamp):
@@ -89,13 +89,13 @@ def get_api_answer(timestamp):
     else:
         if response.status_code == 404:
             raise RequestError(
-                f"Эндпоинт {ENDPOINT} недоступен. "
-                f"Код ответа API: {response.status_code}."
+                f'Эндпоинт {ENDPOINT} недоступен. '
+                f'Код ответа API: {response.status_code}.'
             )
         elif response.status_code != 200:
             raise RequestError(
-                "Ошибка обращения к API. "
-                f"Код ответа API: {response.status_code}."
+                'Ошибка обращения к API. '
+                f'Код ответа API: {response.status_code}.'
             )
         return response.json()
 
@@ -110,8 +110,8 @@ def check_response(response):
         raise KeyError('В ответе API отсутствуют ожидаемые ключи.')
     elif not isinstance(response['homeworks'], list):
         raise TypeError(
-            "Ошибка типа полученных данных под ключом 'homeworks'. "
-            "Ожидается список."
+            'Ошибка типа полученных данных под ключом "homeworks". '
+            'Ожидается список.'
         )
 
 
@@ -124,7 +124,7 @@ def parse_status(homework):
     homework_status = homework.get('status')
 
     if not homework_name:
-        raise KeyError("В ответе API нет ключа 'homework_name'.")
+        raise KeyError('В ответе API нет ключа "homework_name".')
     elif homework_status not in HOMEWORK_VERDICTS:
         raise ValueError(
             'В ответе API неожиданный статус домашней работы.'
