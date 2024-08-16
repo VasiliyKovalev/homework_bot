@@ -39,7 +39,9 @@ logger.addHandler(handler)
 
 
 def check_tokens():
-    """Проверка доступности переменных окружения."""
+    """
+    Проверка доступности переменных окружения.
+    """
     if not PRACTICUM_TOKEN:
         logger.critical(
             'Отсутствует обязательная переменная окружения: '
@@ -61,7 +63,9 @@ def check_tokens():
 
 
 def send_message(bot, message):
-    """Отправка сообщения в Telegram-чат."""
+    """
+    Отправка сообщения в Telegram-чат.
+    """
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
     except Exception:
