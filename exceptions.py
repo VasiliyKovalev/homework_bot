@@ -4,5 +4,5 @@ class NoEnvVarsError(Exception):
         return 'Не обнаружены все необходимые переменные окружения'
 
 
-class RequestError(Exception):
+class RequestToApiError(Exception):
     pass

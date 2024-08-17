@@ -2,13 +2,14 @@ import logging
 import os
 import sys
 import time
+from http import HTTPStatus
 from logging import Formatter, StreamHandler
 
 import requests
 from dotenv import load_dotenv
-from telebot import TeleBot
+from telebot import apihelper, TeleBot
 
-from exceptions import NoEnvVarsError, RequestError
+from exceptions import NoEnvVarsError, RequestToApiError
 
 load_dotenv()
 
@@ -33,43 +34,45 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 handler = StreamHandler(stream=sys.stdout)
 handler.setFormatter(
-    Formatter('%(asctime)s [%(levelname)s] %(message)s')
+    Formatter(
+        '%(asctime)s [%(levelname)s] %(message)s '
+        'Место вызова: %(funcName)s, строка: %(lineno)d'
+    )
 )
 logger.addHandler(handler)
 
 
 def check_tokens():
     """Проверка доступности переменных окружения."""
-    if not PRACTICUM_TOKEN:
+    source = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
+    undefined_vars = ()
+    for token in source:
+        if token not in globals():
+            undefined_vars += (token,)
+        elif globals().get(token) is None:
+            undefined_vars += (token,)
+    if undefined_vars:
         logger.critical(
-            'Отсутствует обязательная переменная окружения: '
-            '"PRACTICUM_TOKEN". Программа принудительно остановлена.'
-        )
-        raise NoEnvVarsError
-    elif not TELEGRAM_TOKEN:
-        logger.critical(
-            'Отсутствует обязательная переменная окружения: '
-            '"TELEGRAM_TOKEN". Программа принудительно остановлена.'
-        )
-        raise NoEnvVarsError
-    elif not TELEGRAM_CHAT_ID:
-        logger.critical(
-            'Отсутствует обязательная переменная окружения: '
-            '"TELEGRAM_CHAT_ID". Программа принудительно остановлена.'
+            'Отсутствуют обязательные переменные окружения: '
+            f'{str(undefined_vars)[1:-1]}. '
+            'Программа принудительно остановлена.'
         )
         raise NoEnvVarsError
 
 
 def send_message(bot, message):
     """Отправка сообщения в Telegram-чат."""
+    logger.debug(
+        f'Запуск процесса отправки сообщения "{message}".'
+    )
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-    except Exception:
+    except (apihelper.ApiException, requests.RequestException):
         logger.exception(
-            'Не удалось отправить сообщение.'
+            f'Не удалось отправить сообщение "{message}".'
         )
     else:
-        logger.debug(f'Бот отправил сообщение: "{message}".')
+        logger.debug(f'Бот отправил сообщение "{message}".')
 
 
 def get_api_answer(timestamp):
@@ -77,39 +80,56 @@ def get_api_answer(timestamp):
     Отправка запроса к эндпоинту API-сервиса.
     В случае успеха возвращает ответ API, приведя его к типам данных Python.
     """
+    params = {'from_date': timestamp}
+    logger.debug(
+        'Запуск процесса отправки запроса к эндпоинту '
+        f'{ENDPOINT}. Параметры запроса: {params}.'
+    )
     try:
         response = requests.get(
             ENDPOINT,
             headers=HEADERS,
-            params={'from_date': timestamp}
+            params=params
         )
-    except Exception:
-        raise RequestError('Ошибка обращения к API.')
+    except requests.RequestException:
+        raise ConnectionError(
+            'Ошибка отправки запроса к эндпоинту '
+            f'{ENDPOINT}. Параметры запроса: {params}.'
+        )
     else:
-        if response.status_code == 404:
-            raise RequestError(
-                f'Эндпоинт {ENDPOINT} недоступен. '
+        if response.status_code != HTTPStatus.OK:
+            raise RequestToApiError(
+                f'Ошибка запроса к эндпоинту {ENDPOINT}. '
+                f'Причина: {response.reason}. '
                 f'Код ответа API: {response.status_code}.'
             )
-        elif response.status_code != 200:
-            raise RequestError(
-                'Ошибка обращения к API. '
-                f'Код ответа API: {response.status_code}.'
-            )
+        logger.debug(
+            'Успешное завершение отправки запроса к эндпоинту '
+            f'{ENDPOINT}. Параметры запроса: {params}.'
+        )
         return response.json()
 
 
 def check_response(response):
     """Проверка ответа API на соответствие документации."""
+    logger.debug('Запуск проверки ответа API.')
     if not isinstance(response, dict):
-        raise TypeError('Ошибка типа возвращаемых данных. Ожидается словарь.')
-    elif not ('homeworks' in response and 'current_date' in response):
-        raise KeyError('В ответе API отсутствуют ожидаемые ключи.')
+        raise TypeError(
+            'Ошибка типа возвращаемых данных. '
+            f'Полученный тип данных: {type(response)}. '
+            'Ожидаемый тип данных: dict. '
+        )
+    elif 'homeworks' not in response:
+        raise KeyError(
+            'В ответе API отсутствует ожидаемый ключ "homeworks".'
+        )
     elif not isinstance(response['homeworks'], list):
         raise TypeError(
             'Ошибка типа полученных данных под ключом "homeworks". '
-            'Ожидается список.'
+            f'Полученный тип данных: {type(response["homeworks"])}. '
+            'Ожидаемый тип данных: list.'
         )
+    logger.debug('Успешное завершение проверки ответа API.')
 
 
 def parse_status(homework):
@@ -117,18 +137,29 @@ def parse_status(homework):
     Извлечение из информации о конкретной домашней работе статуса этой работы.
     В случае успеха возвращает подготовленную для отправки в Telegram строку.
     """
+    logger.debug('Запуск проверки статуса домашней работы.')
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
 
-    if not homework_name:
+    if 'homework_name' not in homework:
         raise KeyError('В ответе API нет ключа "homework_name".')
-    elif homework_status not in HOMEWORK_VERDICTS:
-        raise ValueError(
-            'В ответе API неожиданный статус домашней работы.'
-        )
     elif homework_status:
-        verdict = HOMEWORK_VERDICTS[homework_status]
-        return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+        if homework_status not in HOMEWORK_VERDICTS:
+            raise ValueError(
+                'В ответе API неожиданный статус домашней работы: '
+                f'{homework_status}.'
+            )
+        else:
+            verdict = HOMEWORK_VERDICTS[homework_status]
+            logger.debug(
+                'Успешное завершение проверки статуса домашней работы.'
+            )
+            return (
+                f'Изменился статус проверки работы "{homework_name}". '
+                f'{verdict}'
+            )
+    else:
+        raise KeyError('В ответе API нет ключа "status".')
 
 
 def main():
@@ -145,24 +176,23 @@ def main():
             response = get_api_answer(timestamp)
             check_response(response)
 
-            timestamp = response['current_date']
-
-            if len(response['homeworks']) > 0:
-                for homework in response['homeworks']:
-                    if parse_status(homework):
-                        message = parse_status(homework)
-                        send_message(bot, message)
-            logger.debug(
-                'Новые статусы домашних работ отсутствуют.'
-            )
+            if response['homeworks']:
+                message = parse_status(response['homeworks'][0])
+                send_message(bot, message)
+                current_error_message = ''
+            else:
+                logger.debug(
+                    'Новые статусы домашних работ отсутствуют.'
+                )
+            timestamp = response.get('current_date', int(time.time()))
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
             if current_error_message != message:
                 send_message(bot, message)
             current_error_message = message
-
-        time.sleep(RETRY_PERIOD)
+        finally:
+            time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
