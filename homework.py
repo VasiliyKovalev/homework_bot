@@ -47,9 +47,7 @@ def check_tokens():
     source = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
     undefined_vars = ()
     for token in source:
-        if token not in globals():
-            undefined_vars += (token,)
-        elif globals().get(token) is None:
+        if not globals().get(token):
             undefined_vars += (token,)
     if undefined_vars:
         logger.critical(
@@ -143,23 +141,21 @@ def parse_status(homework):
 
     if 'homework_name' not in homework:
         raise KeyError('В ответе API нет ключа "homework_name".')
-    elif homework_status:
-        if homework_status not in HOMEWORK_VERDICTS:
-            raise ValueError(
-                'В ответе API неожиданный статус домашней работы: '
-                f'{homework_status}.'
-            )
-        else:
-            verdict = HOMEWORK_VERDICTS[homework_status]
-            logger.debug(
-                'Успешное завершение проверки статуса домашней работы.'
-            )
-            return (
-                f'Изменился статус проверки работы "{homework_name}". '
-                f'{verdict}'
-            )
-    else:
+    elif 'status' not in homework:
         raise KeyError('В ответе API нет ключа "status".')
+    elif homework_status not in HOMEWORK_VERDICTS:
+        raise ValueError(
+            'В ответе API неожиданный статус домашней работы: '
+            f'{homework_status}.'
+        )
+    verdict = HOMEWORK_VERDICTS[homework_status]
+    logger.debug(
+        'Успешное завершение проверки статуса домашней работы.'
+    )
+    return (
+        f'Изменился статус проверки работы "{homework_name}". '
+        f'{verdict}'
+    )
 
 
 def main():
